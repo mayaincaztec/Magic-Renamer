@@ -1,0 +1,7 @@
+{
+  "name": "Magic Renamer",
+  "description": "An AI-powered tool to automatically rename Vietnamese legal documents based on their content (Date, Number, Agency, and Summary) following a specific format.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
