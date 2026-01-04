@@ -1,5 +1,6 @@
 
-// Từ điển viết tắt cơ quan (Tổ chức)
+import { RenamingMode, DocumentMetadata } from './types';
+
 export const AGENCY_MAPPING: Record<string, string> = {
   "thanh tra chính phủ": "TTCP", 
   "văn phòng chính phủ": "VPCP", 
@@ -39,15 +40,22 @@ export const AGENCY_MAPPING: Record<string, string> = {
   "sở văn hóa thể thao và du lịch": "SVHTTDL", 
   "sở thông tin và truyền thông": "STTTT",
   "sở khoa học và công nghệ": "SKHCN",
-  "trung tâm phát triển quỹ đất": "TTPTQD", 
-  "hội đồng thẩm định giá đất": "HDTDGD",
-  "ban quản lý dự án": "BQLDA",
-  "văn phòng đăng ký đất đai": "VPDKDD",
   "ủy ban nhân dân": "UBND", 
   "hội đồng nhân dân": "HDND"
 };
 
-// Từ điển viết tắt trích yếu (NFC chuẩn)
+export const DOC_TYPE_MAPPING: Record<string, string> = {
+  "luật": "Luat",
+  "nghị quyết": "NQ",
+  "nghị định": "ND",
+  "thông tư": "TT",
+  "quyết định": "QD",
+  "chỉ thị": "CT",
+  "kế hoạch": "KH",
+  "thông báo": "TB",
+  "công văn": "CV"
+};
+
 export const SUMMARY_MAPPING: Record<string, string> = {
   "chủ trương đầu tư": "CTDT",
   "điều chỉnh cục bộ": "DCCB",
@@ -56,6 +64,7 @@ export const SUMMARY_MAPPING: Record<string, string> = {
   "quy hoạch phân khu": "QHQK",
   "khu đô thị": "KDT", 
   "khu dân cư": "KDC", 
+  "khu nhà ở": "KNO",
   "sửa đổi bổ sung": "SDBS", 
   "sửa đổi, bổ sung": "SDBS",
   "quyền sử dụng đất": "QSDD", 
@@ -67,40 +76,29 @@ export const SUMMARY_MAPPING: Record<string, string> = {
   "giải phóng mặt bằng": "GPMB",
   "tái định cư": "TDC",
   "giấy phép xây dựng": "GPXD",
-  "báo cáo nghiên cứu khả thi": "BCNCKT",
-  "thiết kế kỹ thuật": "TKKT",
-  "kết quả": "KQ",
+  "hạ tầng kỹ thuật": "HTKT",
   "tờ trình": "TTr", 
   "báo cáo": "BC", 
   "kết luận": "KL", 
-  "thông báo": "TB",
   "nghị quyết": "NQ", 
   "nghị định": "ND", 
   "thông tư": "TT", 
   "quyết định": "QD"
 };
 
-/**
- * Loại bỏ dấu tiếng Việt
- */
-export const removeVietnameseTones = (str: string): string => {
+export const sanitizeString = (str: string): string => {
   if (!str) return "";
   str = str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
   str = str.replace(/đ/g, "d").replace(/Đ/g, "D");
-  return str.replace(/[!@#$%^*()+\=\[\]{};':"\\|,<>\/?]/g, "");
+  return str.replace(/[*:"?\/\\|<>]/g, "").replace(/\s+/g, " ").trim();
 };
 
-/**
- * Viết tắt tên cơ quan và địa phương
- */
 export const formatAgencyName = (fullAgency: string): string => {
   const normalized = fullAgency.normalize('NFC').trim();
   const lower = normalized.toLowerCase();
-  
   let agencyAbbr = "";
   let locationPart = normalized;
 
-  // 1. Tìm tổ chức (UBND, Sở...)
   const sortedAgencyKeys = Object.keys(AGENCY_MAPPING).sort((a, b) => b.length - a.length);
   for (const key of sortedAgencyKeys) {
     const idx = lower.indexOf(key);
@@ -111,78 +109,71 @@ export const formatAgencyName = (fullAgency: string): string => {
     }
   }
 
-  // 2. Xử lý địa phương
   const adminLevelsRegex = /(tỉnh|thành phố|thanh pho|tp\.?|quận|quan|huyện|huyen|thị xã|thi xa|xã|xa|phường|phuong|thị trấn|thi tran)/gi;
-  
-  let cleanLocation = locationPart
-    .replace(adminLevelsRegex, "")
-    .replace(/[\s\.\-\,]+/g, " ")
-    .trim();
-
-  if (!agencyAbbr && /^(tỉnh|thành phố|tp)/i.test(normalized)) {
-      cleanLocation = normalized.replace(adminLevelsRegex, "").trim();
-  }
+  let cleanLocation = locationPart.replace(adminLevelsRegex, "").replace(/[\s\.\-\,]+/g, " ").trim();
 
   if (cleanLocation) {
-    const locationAbbr = removeVietnameseTones(cleanLocation)
-      .split(/\s+/)
-      .filter(word => word.length > 0)
-      .map(word => word.charAt(0).toUpperCase())
-      .join("");
-    
+    const locationAbbr = sanitizeString(cleanLocation).split(/\s+/).map(w => w.charAt(0).toUpperCase()).join("");
     return agencyAbbr ? `${agencyAbbr} ${locationAbbr}` : locationAbbr;
   }
-  
   return agencyAbbr || normalized;
 };
 
-/**
- * Viết tắt trích yếu
- */
 export const formatSummary = (summary: string): string => {
   let formatted = summary.normalize('NFC').trim();
-  
-  // Xóa các cụm từ thừa ở đầu trích yếu
-  formatted = formatted.replace(/^(về việc|về|phê duyệt|ban hành|chấp thuận)\s+/gi, "");
-
+  formatted = formatted.replace(/^(về việc|về)\s+/gi, "");
   const sortedKeys = Object.keys(SUMMARY_MAPPING).sort((a, b) => b.length - a.length);
-  
   for (const key of sortedKeys) {
     const regex = new RegExp(key, 'gi');
-    if (regex.test(formatted)) {
-      formatted = formatted.replace(regex, SUMMARY_MAPPING[key]);
-    }
+    formatted = formatted.replace(regex, SUMMARY_MAPPING[key]);
   }
-  
-  return formatted;
+  return sanitizeString(formatted);
 };
 
-/**
- * Tạo tên file hoàn chỉnh
- */
-export const generateNewName = (metadata: { isDraft?: boolean, date: string, docNumber: string, agency: string, summary: string }): string => {
-  const abbrSummary = formatSummary(metadata.summary);
-  const finalSummary = removeVietnameseTones(abbrSummary).trim();
-
-  const abbrAgency = formatAgencyName(metadata.agency);
-  const finalAgency = removeVietnameseTones(abbrAgency).trim();
-
-  if (metadata.isDraft) {
-    const datePart = metadata.date && metadata.date.length === 8 ? metadata.date : "";
-    return `[Draft] ${datePart} ${finalSummary}`.replace(/\s+/g, ' ').trim();
-  }
-
+export const generateNewName = (metadata: DocumentMetadata, mode: RenamingMode = 'standard'): string => {
+  const finalSummary = formatSummary(metadata.summary);
+  const finalAgency = sanitizeString(formatAgencyName(metadata.agency));
+  const dateStr = metadata.date || "";
+  
+  // Xử lý số hiệu
   const cleanDocNumber = metadata.docNumber ? metadata.docNumber.replace(/\s*\/\s*/g, '/') : "";
-  const legislativeMatch = cleanDocNumber.match(/^(\d+)\/(\d{4})\/([a-zA-Z0-9\.\-\u00C0-\u1EF9]+)$/);
+  const legislativeMatch = cleanDocNumber.match(/^(\d+)\/(\d{4})\/([a-zA-Z0-9\.\-]+)$/);
 
-  if (legislativeMatch) {
+  let resultName = "";
+
+  // Chế độ 2: Văn bản Luật/Nghị định/Thông tư
+  if (mode === 'legislative' && !metadata.isDraft) {
+    const number = legislativeMatch ? legislativeMatch[1] : (cleanDocNumber.match(/\d+/) ? cleanDocNumber.match(/\d+/)![0] : "00");
+    const year = legislativeMatch ? legislativeMatch[2] : dateStr.substring(0, 4);
+    
+    // Tìm mã loại văn bản (NQ, ND, TT...)
+    const lowerType = metadata.docType.toLowerCase();
+    let typeAbbr = "";
+    for (const key in DOC_TYPE_MAPPING) {
+      if (lowerType.includes(key)) {
+        typeAbbr = DOC_TYPE_MAPPING[key];
+        break;
+      }
+    }
+    
+    // Cấu trúc: YYYY [Số] [Cơ quan] _[Loại VB] [Trích yếu]
+    resultName = `${year} ${number} ${finalAgency} _${typeAbbr} ${finalSummary}`.replace(/\s+/g, ' ').trim();
+  }
+  // Chế độ 1: Văn bản pháp lý thông thường (Mặc định)
+  else if (legislativeMatch && !metadata.isDraft) {
+    // Mẫu chuẩn pháp quy nếu có số hiệu đầy đủ
     const number = legislativeMatch[1];
     const year = legislativeMatch[2];
-    const suffix = removeVietnameseTones(legislativeMatch[3]);
-    return `${year} ${number}.${suffix} ${finalSummary}`.replace(/\s+/g, ' ').trim();
+    const suffix = sanitizeString(legislativeMatch[3]);
+    resultName = `${year} ${number}.${suffix} ${finalSummary}`.trim();
   } else {
+    // Mẫu thông thường: YYYYMMDD Số Cơ_quan _Trích_yếu
     const numericPart = cleanDocNumber.match(/\d+/);
-    const cleanNumber = numericPart ? numericPart[0] : "0000";
-    return `${metadata.date} ${cleanNumber} ${finalAgency} _${finalSummary}`.replace(/\s+/g, ' ').trim();
+    const cleanNumber = numericPart ? numericPart[0] : "00";
+    const draftPrefix = metadata.isDraft ? "[Draft] " : "";
+    resultName = `${draftPrefix}${dateStr} ${cleanNumber} ${finalAgency} _${finalSummary}`.trim();
   }
+
+  // Loại bỏ dấu chấm ở cuối cùng trong tên file (nếu có)
+  return resultName.replace(/\.+$/, "").trim();
 };
