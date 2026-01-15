@@ -1,0 +1,5 @@
+{
+    "geminiModel": "gemini-flash-lite-latest",
+    "groqModel": "meta-llama/llama-4-maverick-17b-128e-instruct",
+    "_comment": "Example config file for Magic Renamer. Upload this to a public URL (e.g. GitHub Raw)."
+}
